@@ -22,6 +22,9 @@ cd project_rag_app
 
 ### 1.1 Prerequisites
 ```bash
+# python must be installed
+python3 --version
+
 # Docker must be installed
 docker --version
 docker compose version
@@ -32,7 +35,7 @@ docker ps
 
 ### 1.2 Download BGE reranker model
 ```bash
-cd rag-backend/
+cd backend/
 
 pip install -U huggingface_hub
 
@@ -45,6 +48,8 @@ du -sh models/bge-reranker-base/
 
 cd ..
 ```
+
+If download fails, create a HF token for your huggging_face account and run `hf auth login` to set up credentials and run the above command to download the cross-enocder model.
 
 ### 1.3 Build images and pull models
 ```bash
