@@ -1,0 +1,66 @@
+# FAISS index
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: faiss-index-pvc
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: rag-backend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.persistence.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.faissIndex.size }}
+
+---
+# Ollama models
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models-pvc
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: ollama
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.persistence.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.ollamaModels.size }}
+
+---
+# BGE reranker
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bge-reranker-pvc
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: rag-backend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.persistence.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.bgeReranker.size }}
+
+---
+# backend logs
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-logs-pvc
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: rag-backend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.persistence.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.logs.size }}

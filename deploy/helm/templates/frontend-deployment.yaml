@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: rag-frontend
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: rag-frontend
+  template:
+    metadata:
+      labels:
+        app: rag-frontend
+    spec:
+      containers:
+        - name: rag-frontend
+          image: "{{ .Values.images.frontend.repository }}:{{ .Values.images.frontend.tag }}"
+          imagePullPolicy: {{ .Values.images.frontend.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ports.frontend }}
+
+          resources:
+            requests:
+              memory: {{ .Values.resources.frontend.requests.memory }}
+              cpu:    {{ .Values.resources.frontend.requests.cpu }}
+            limits:
+              memory: {{ .Values.resources.frontend.limits.memory }}
+              cpu:    {{ .Values.resources.frontend.limits.cpu }}
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.ports.frontend }}
+            initialDelaySeconds: 10
+            periodSeconds:       20
+            failureThreshold:    3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.ports.frontend }}
+            initialDelaySeconds: 5
+            periodSeconds:       10
+            failureThreshold:    3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-frontend-service
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: rag-frontend
+  ports:
+    - port:       {{ .Values.ports.frontend }}
+      targetPort: {{ .Values.ports.frontend }}
+      name: http
+  type: {{ .Values.service.type }}

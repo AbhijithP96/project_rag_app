@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      containers:
+        - name: ollama
+          image: "{{ .Values.images.ollama.repository }}:{{ .Values.images.ollama.tag }}"
+          imagePullPolicy: {{ .Values.images.ollama.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ports.ollama }}
+
+          {{- if .Values.gpu.enabled }}
+          resources:
+            requests:
+              {{ .Values.gpu.resourceName }}: {{ .Values.gpu.count }}
+              memory: {{ .Values.resources.ollama.requests.memory }}
+              cpu:    {{ .Values.resources.ollama.requests.cpu }}
+            limits:
+              {{ .Values.gpu.resourceName }}: {{ .Values.gpu.count }}
+              memory: {{ .Values.resources.ollama.limits.memory }}
+              cpu:    {{ .Values.resources.ollama.limits.cpu }}
+          {{- else }}
+          resources:
+            requests:
+              memory: {{ .Values.resources.ollama.requests.memory }}
+              cpu:    {{ .Values.resources.ollama.requests.cpu }}
+            limits:
+              memory: {{ .Values.resources.ollama.limits.memory }}
+              cpu:    {{ .Values.resources.ollama.limits.cpu }}
+          {{- end }}
+
+          volumeMounts:
+            - name: ollama-models
+              mountPath: {{ .Values.persistence.ollamaModels.mountPath }}
+
+          livenessProbe:
+            httpGet:
+              path: /api/tags
+              port: {{ .Values.ports.ollama }}
+            initialDelaySeconds: {{ .Values.probes.ollama.liveness.initialDelaySeconds }}
+            periodSeconds:       {{ .Values.probes.ollama.liveness.periodSeconds }}
+            timeoutSeconds:      {{ .Values.probes.ollama.liveness.timeoutSeconds }}
+            failureThreshold:    {{ .Values.probes.ollama.liveness.failureThreshold }}
+
+          readinessProbe:
+            httpGet:
+              path: /api/tags
+              port: {{ .Values.ports.ollama }}
+            initialDelaySeconds: {{ .Values.probes.ollama.readiness.initialDelaySeconds }}
+            periodSeconds:       {{ .Values.probes.ollama.readiness.periodSeconds }}
+            timeoutSeconds:      {{ .Values.probes.ollama.readiness.timeoutSeconds }}
+            failureThreshold:    {{ .Values.probes.ollama.readiness.failureThreshold }}
+
+      volumes:
+        - name: ollama-models
+          persistentVolumeClaim:
+            claimName: ollama-models-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-service
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: ollama
+  ports:
+    - port:       {{ .Values.ports.ollama }}
+      targetPort: {{ .Values.ports.ollama }}
+      name: http
+  type: ClusterIP

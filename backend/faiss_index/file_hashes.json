@@ -1,0 +1,10 @@
+{
+  "test_docs/test.md": "93c3e58819b98186e01a0afe2ca9833e668b6b998546c5f8361ee77cfdb7307b",
+  "test_docs/test.pdf": "a9bb9c2dec1b3b1668addcb24c3b50fd0e1d2e09e6fcec1ad84ca26b372c8c27",
+  "test_docs/test.txt": "615ee26b9afc25a901e7f47d0ea92802e73da5106eae355c0b24845ee3576b68",
+  "test_docs/test.xlsx": "6833811dc4a7e7027b332d12f65a6674f8403c767769c30c33b5e5971a664f50",
+  "/media/basilisk/Abhi1/Thesis/project/rag_systems/new_docs/Understanding_Climate_Change.pdf": "1d58a0fac2435c2ce4129ff84906b93118d731e4a004e7a26f8ab8f749a92669",
+  "/media/basilisk/Abhi1/Thesis/project/rag_systems/new_docs/attention_is_all_you_need.pdf": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697",
+  "/media/basilisk/Abhi1/Thesis/cyber/frontend/backend/test_docs/new_docs/Understanding_Climate_Change.pdf": "1d58a0fac2435c2ce4129ff84906b93118d731e4a004e7a26f8ab8f749a92669",
+  "/media/basilisk/Abhi1/Thesis/cyber/frontend/backend/test_docs/new_docs/attention_is_all_you_need.pdf": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697"
+}

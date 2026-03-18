@@ -1,0 +1,146 @@
+# replica count 
+replicaCount: 1
+
+# namespace
+namespace: rag-app
+
+# images
+images:
+  backend:
+    repository: rag-backend
+    tag: latest
+    pullPolicy: Never       # airgap — images loaded locally
+  frontend:
+    repository: rag-frontend
+    tag: latest
+    pullPolicy: Never
+  ollama:
+    repository: ollama/ollama
+    tag: latest
+    pullPolicy: Never
+
+# ports
+ports:
+  backend:  8000
+  frontend: 80
+  ollama:   11434
+
+# GPU passthrough
+gpu:
+  enabled: true
+  resourceName: nvidia.com/gpu
+  count: 1
+
+# Ollama models
+ollama:
+  models:
+    llm:       llama3.2:3b
+    embedding: mxbai-embed-large
+
+# backend environment
+backend:
+  env:
+    OLLAMA_BASE_URL:          "http://ollama-service:11434"
+    LLM_MODEL:                "llama3.2:3b"
+    EMBEDDING_MODEL:          "mxbai-embed-large"
+    LOG_LEVEL:                "INFO"
+    MAX_CONCURRENT_REQUESTS:  "3"
+    TOKEN_BUDGET:             "8192"
+    RERANK_THRESHOLD:         "0.3"
+    PII_REDACTION:            "true"
+    CONTENT_HASHING:          "true"
+    HYBRID_SEARCH:            "true"
+    RERANKING:                "true"
+
+# persistent volumes
+persistence:
+  storageClass: local-path    # minikube: standard | k3s: local-path
+
+  faissIndex:
+    size: 5Gi
+    mountPath: /app/faiss_index
+
+  ollamaModels:
+    size: 20Gi
+    mountPath: /root/.ollama
+
+  bgeReranker:
+    size: 2Gi
+    mountPath: /app/models
+
+  logs:
+    size: 1Gi
+    mountPath: /app/logs
+
+# resources
+resources:
+  backend:
+    requests:
+      memory: "2Gi"
+      cpu:    "500m"
+    limits:
+      memory: "8Gi"
+      cpu:    "2000m"
+
+  frontend:
+    requests:
+      memory: "128Mi"
+      cpu:    "100m"
+    limits:
+      memory: "256Mi"
+      cpu:    "500m"
+
+  ollama:
+    requests:
+      memory: "4Gi"
+      cpu:    "1000m"
+    limits:
+      memory: "16Gi"
+      cpu:    "4000m"
+
+# service
+service:
+  type: ClusterIP
+
+# ingress
+ingress:
+  enabled: true
+  host: rag-app.local
+
+# probes timing
+probes:
+  backend:
+    liveness:
+      initialDelaySeconds: 60
+      periodSeconds:       30
+      timeoutSeconds:      10
+      failureThreshold:    3
+    readiness:
+      initialDelaySeconds: 30
+      periodSeconds:       10
+      timeoutSeconds:      5
+      failureThreshold:    3
+    startup:
+      initialDelaySeconds: 30
+      periodSeconds:       10
+      failureThreshold:    12   # 2 min max startup
+
+  ollama:
+    liveness:
+      initialDelaySeconds: 30
+      periodSeconds:       20
+      timeoutSeconds:      10
+      failureThreshold:    3
+    readiness:
+      initialDelaySeconds: 15
+      periodSeconds:       10
+      timeoutSeconds:      5
+      failureThreshold:    3
+
+# HPA 
+autoscaling:
+  enabled: false             # enable only with multi-node cluster
+  minReplicas: 1
+  maxReplicas: 3
+  cpuThreshold: 70
+  memoryThreshold: 80

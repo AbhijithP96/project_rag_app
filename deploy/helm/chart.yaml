@@ -1,0 +1,17 @@
+apiVersion: v2
+name: rag-app
+description: >
+  Production RAG assistant with hybrid search, BGE reranking,
+  SSE streaming, and Shadow DOM isolated frontend.
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - rag
+  - llm
+  - ollama
+  - faiss
+  - airgap
+maintainers:
+  - name: your-name
+    email: your-email

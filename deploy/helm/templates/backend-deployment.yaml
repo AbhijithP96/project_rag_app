@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: rag-backend
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: rag-backend
+  template:
+    metadata:
+      labels:
+        app: rag-backend
+    spec:
+
+      # wait for ollama before starting backend
+      initContainers:
+        - name: wait-for-ollama
+          image: busybox:1.35
+          imagePullPolicy: Never
+          command:
+            - sh
+            - -c
+            - |
+              echo "waiting for ollama..."
+              until wget -q -O- http://ollama-service:{{ .Values.ports.ollama }}/api/tags; do
+                sleep 5
+              done
+              echo "ollama ready"
+
+      containers:
+        - name: rag-backend
+          image: "{{ .Values.images.backend.repository }}:{{ .Values.images.backend.tag }}"
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.ports.backend }}
+
+          envFrom:
+            - configMapRef:
+                name: rag-backend-config
+
+          resources:
+            requests:
+              memory: {{ .Values.resources.backend.requests.memory }}
+              cpu:    {{ .Values.resources.backend.requests.cpu }}
+            limits:
+              memory: {{ .Values.resources.backend.limits.memory }}
+              cpu:    {{ .Values.resources.backend.limits.cpu }}
+
+          volumeMounts:
+            - name: faiss-index
+              mountPath: {{ .Values.persistence.faissIndex.mountPath }}
+            - name: bge-reranker
+              mountPath: {{ .Values.persistence.bgeReranker.mountPath }}
+            - name: backend-logs
+              mountPath: {{ .Values.persistence.logs.mountPath }}
+
+          # startup probe — extra time for BGE reranker warmup
+          startupProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.ports.backend }}
+            initialDelaySeconds: {{ .Values.probes.backend.startup.initialDelaySeconds }}
+            periodSeconds:       {{ .Values.probes.backend.startup.periodSeconds }}
+            failureThreshold:    {{ .Values.probes.backend.startup.failureThreshold }}
+
+          # liveness probe — checks worker.is_ready()
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.ports.backend }}
+            initialDelaySeconds: {{ .Values.probes.backend.liveness.initialDelaySeconds }}
+            periodSeconds:       {{ .Values.probes.backend.liveness.periodSeconds }}
+            timeoutSeconds:      {{ .Values.probes.backend.liveness.timeoutSeconds }}
+            failureThreshold:    {{ .Values.probes.backend.liveness.failureThreshold }}
+
+          # readiness probe — only route traffic when fully ready
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.ports.backend }}
+            initialDelaySeconds: {{ .Values.probes.backend.readiness.initialDelaySeconds }}
+            periodSeconds:       {{ .Values.probes.backend.readiness.periodSeconds }}
+            timeoutSeconds:      {{ .Values.probes.backend.readiness.timeoutSeconds }}
+            failureThreshold:    {{ .Values.probes.backend.readiness.failureThreshold }}
+
+      volumes:
+        - name: faiss-index
+          persistentVolumeClaim:
+            claimName: faiss-index-pvc
+        - name: bge-reranker
+          persistentVolumeClaim:
+            claimName: bge-reranker-pvc
+        - name: backend-logs
+          persistentVolumeClaim:
+            claimName: backend-logs-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-backend-service
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: rag-backend
+  ports:
+    - port:       {{ .Values.ports.backend }}
+      targetPort: {{ .Values.ports.backend }}
+      name: http
+  type: {{ .Values.service.type }}

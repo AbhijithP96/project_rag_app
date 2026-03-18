@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-backend-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: rag-backend
+data:
+  {{- range $key, $val := .Values.backend.env }}
+  {{ $key }}: {{ $val | quote }}
+  {{- end }}
