@@ -6,7 +6,7 @@ This guide covers the complete process for deploying the RAG app
 on an airgapped RHEL9 VM with no internet access.
 
 **Section 1** — Internet machine: download and package everything  
-**Section 2** — RHEL9 VM: install dependencies and run the app
+**Section 2** — VM: install dependencies and run the app
 
 ### What gets bundled
 
@@ -162,7 +162,7 @@ scp deploy/bundle/rag-app-bundle.tar.gz \
 
 ---
 
-## Section 2 — RHEL9 VM (no internet)
+## Section 2 on Empty VM (no internet)
 
 ### 2.1 Verify bundle integrity
 ```bash
