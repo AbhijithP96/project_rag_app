@@ -8,21 +8,6 @@ using Docker and Docker Compose. No internet required on the VM.
 **Section 1** — Internet machine: build images and create bundle  
 **Section 2** — VM: install Docker offline and run the app
 
-### What gets bundled
-
-| File | Size | Description |
-|------|------|-------------|
-| rag-backend.tar | ~4 GB | FastAPI + Python venv + BGE reranker |
-| rag-frontend.tar | ~50 MB | React app + nginx |
-| ollama.tar | ~1 GB | Ollama server |
-| ollama-models.tar.gz | ~2.7 GB | llama3.2:3b + mxbai-embed-large |
-| docker-compose.yml | — | Service definitions |
-| .env | — | Configuration |
-| load-and-run.sh | — | VM setup script |
-| **Total** | **~8 GB** | |
-
----
-
 ## Usage
 
 Clone the repository:
