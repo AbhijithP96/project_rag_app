@@ -1,0 +1,83 @@
+services:
+
+  # ── Ollama LLM server ─────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    # GPU — comment out if no NVIDIA GPU available
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── FastAPI backend ───────────────────────────────────
+  rag-backend:
+    image: rag-backend:latest
+    container_name: rag-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - LLM_MODEL=llama3.2:3b
+      - EMBEDDING_MODEL=mxbai-embed-large
+      - LOG_LEVEL=INFO
+      - MAX_CONCURRENT_REQUESTS=3
+      - TOKEN_BUDGET=8192
+      - RERANK_THRESHOLD=0.3
+      - PII_REDACTION=true
+      - CONTENT_HASHING=true
+      - HYBRID_SEARCH=true
+      - RERANKING=true
+    volumes:
+      # persist FAISS index between restarts
+      - faiss_index:/app/faiss_index
+      # persist BGE reranker model
+      - bge_reranker:/app/models
+      # persist logs
+      - backend_logs:/app/logs
+      # ── host filesystem access ─────────────────────
+      # mounts host home directory into container at /host/home
+      # users can index any path under /host/home/...
+      # change ${HOST_DOCS_PATH} in .env to restrict to a specific folder
+      - ${HOST_DOCS_PATH:-~}:/host/home:ro
+    depends_on:
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── React frontend ────────────────────────────────────
+  rag-frontend:
+    image: rag-frontend:latest
+    container_name: rag-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      rag-backend:
+        condition: service_healthy
+
+volumes:
+  ollama_models:
+  faiss_index:
+  bge_reranker:
+  backend_logs:
