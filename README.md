@@ -97,71 +97,21 @@ sha256sum -c rag-app-docker.tar.gz.sha256
 
 ### 2.2 Install Docker offline
 
-RHEL9 does not ship Docker by default.
-You need to install it from offline RPMs.
+Most OS does not ship with docker.
+You need to install it from offline packages.
 
-**On the internet machine — download Docker RPMs:**
-```bash
-# run this on internet machine before building bundle
-# requires a RHEL/Fedora machine or container
+Docker must be installed on the VM before loading images.
+Since the VM has no internet access, follow the **offline / manual
+installation** method from the official Docker docs.
 
-mkdir -p deploy/dist/docker-rpms
-
-# add Docker repo
-sudo dnf config-manager \
-    --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
-
-# download RPMs without installing
-dnf download --resolve \
-    --destdir=deploy/dist/docker-rpms \
-    docker-ce \
-    docker-ce-cli \
-    containerd.io \
-    docker-buildx-plugin \
-    docker-compose-plugin
-
-echo "Docker RPMs: $(ls deploy/dist/docker-rpms | wc -l) packages"
+**Official Docker installation guide:**
+```
+https://docs.docker.com/engine/install/
 ```
 
-> **If internet machine is Ubuntu:**
-> Use a RHEL9 container to download RPMs:
-> ```bash
-> docker run --rm \
->     -v $(pwd)/deploy/dist/docker-rpms:/rpms \
->     redhat/ubi9 \
->     bash -c "
->         dnf install -y dnf-plugins-core &&
->         dnf config-manager --add-repo \
->             https://download.docker.com/linux/rhel/docker-ce.repo &&
->         dnf download --resolve --destdir=/rpms \
->             docker-ce docker-ce-cli containerd.io \
->             docker-buildx-plugin docker-compose-plugin
->     "
-> ```
+Select your OS from the list and go to section install from package / offline installation
+Download the offline packge on the internet machine and transfer it to VM and then follow the rest of the instruction to install docker on empty VM.
 
-**On the RHEL9 VM — install from RPMs:**
-```bash
-# extract bundle first
-tar xzf rag-app-docker.tar.gz
-cd dist/
-
-# install Docker from offline RPMs
-sudo dnf install --disablerepo='*' \
-    docker-rpms/*.rpm \
-    -y
-
-# start and enable Docker service
-sudo systemctl enable --now docker
-
-# add your user to docker group (avoids sudo for docker commands)
-sudo usermod -aG docker $USER
-
-# apply group change without logout
-newgrp docker
-
-# verify
-docker --version
-docker compose version
 ```
 
 ### 2.3 Extract the bundle

@@ -34,7 +34,7 @@ command -v curl >/dev/null || {
 }
 
 # check BGE reranker model exists
-if [ ! -d "$PROJECT_ROOT/rag-backend/models/bge-reranker-base" ]; then
+if [ ! -d "$PROJECT_ROOT/backend/models/bge-reranker-base" ]; then
     echo ""
     echo "ERROR: BGE reranker model not found."
     echo ""
@@ -54,8 +54,8 @@ echo "[1/6] Building backend Docker image..."
 
 docker build \
     -t rag-backend:latest \
-    -f "$PROJECT_ROOT/deploy/docker/backend/Dockerfile" \
-    "$PROJECT_ROOT/rag-backend"
+    -f "$PROJECT_ROOT/backend/Dockerfile" \
+    "$PROJECT_ROOT/backend"
 
 echo "rag-backend:latest built ✓"
 
@@ -65,7 +65,7 @@ echo "[2/6] Building frontend Docker image..."
 
 docker build \
     -t rag-frontend:latest \
-    -f "$PROJECT_ROOT/deploy/docker/frontend/Dockerfile" \
+    -f "$PROJECT_ROOT/frontend/Dockerfile" \
     "$PROJECT_ROOT"
 
 echo "rag-frontend:latest built ✓"
