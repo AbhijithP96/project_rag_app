@@ -189,7 +189,7 @@ HOST_DOCS_PATH=/home/user/documents
 
 Inside the container your host path is available at `/host/home`.
 
-**Example:** if your documents are at `/home/user/thesis/docs/`
+**Example:** if your documents are at `/home/user/docs/`
 then inside the widget use the path:
 ```
 /host/home/thesis/docs
@@ -204,13 +204,6 @@ nano .env
 # restart backend to apply
 docker compose restart rag-backend
 ```
-
-**To upload files directly** (alternative to path browsing):
-
-The backend exposes an `/upload` endpoint. Use the widget's
-file picker — files are uploaded into `/app/uploads/` inside
-the container and can then be indexed.
-
 ---
 
 ## Useful commands
@@ -253,124 +246,6 @@ docker compose down -v
 ```
 
 ---
-
-## Troubleshooting
-
-### Docker daemon not starting
-```bash
-sudo systemctl status docker
-sudo journalctl -u docker -n 50
-
-# common fix on RHEL9
-sudo systemctl enable --now docker
-```
-
-### Images not loading
-```bash
-# verify tar files are not corrupted
-sha256sum -c sha256sums.txt
-
-# try loading individually
-docker load -i rag-backend.tar
-docker load -i rag-frontend.tar
-docker load -i ollama.tar
-
-# verify images loaded
-docker images
-```
-
-### Ollama models missing after restore
-```bash
-# check volume exists
-docker volume ls | grep ollama
-
-# check contents
-docker run --rm \
-    -v ollama_models:/data \
-    alpine ls /data
-
-# re-restore
-docker run --rm \
-    -v ollama_models:/data \
-    -v $(pwd):/backup \
-    alpine tar xzf /backup/ollama-models.tar.gz -C /data
-
-# restart ollama
-docker compose restart ollama
-sleep 10
-docker exec rag-ollama ollama list
-```
-
-### Backend cannot see host files
-```bash
-# check .env
-cat .env
-# HOST_DOCS_PATH should be an absolute path
-
-# verify mount is working
-docker exec rag-backend ls /host/home
-
-# update .env and restart
-echo "HOST_DOCS_PATH=/home/$(whoami)" > .env
-docker compose restart rag-backend
-```
-
-### GPU not detected
-```bash
-# check nvidia runtime
-docker info | grep -i runtime
-
-# test GPU access
-docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
-
-# if nvidia runtime not installed
-sudo dnf install -y nvidia-container-toolkit
-sudo nvidia-ctk runtime configure --runtime=docker
-sudo systemctl restart docker
-```
-
-### Port already in use
-```bash
-sudo ss -tlnp | grep -E "3000|8000|11434"
-sudo fuser -k 3000/tcp
-sudo fuser -k 8000/tcp
-```
-
-### Full reset
-```bash
-docker compose down -v
-./load-and-run.sh
-```
-
----
-
-## Architecture
-```
-Browser (localhost:3000)
-         │
-         ▼
-┌─────────────────────┐
-│  rag-frontend       │  nginx serves React SPA
-│  port 3000          │  proxies /api/* to backend
-└──────────┬──────────┘
-           │ /api/*
-           ▼
-┌─────────────────────┐
-│  rag-backend        │  FastAPI
-│  port 8000          │  FAISS + BM25 search
-│                     │  BGE reranker
-│  /host/home ──────────── host filesystem (read-only)
-│  /app/faiss_index   │  persisted index
-│  /app/models        │  BGE reranker weights
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  ollama             │  LLM server
-│  port 11434         │  llama3.2:3b
-│                     │  mxbai-embed-large
-└─────────────────────┘
-```
 
 ## Docker volumes
 
