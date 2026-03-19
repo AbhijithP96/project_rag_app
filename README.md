@@ -37,6 +37,8 @@ docker ps
 ```bash
 cd backend/
 
+mkdir -p models/
+
 pip install -U huggingface_hub
 
 hf download BAAI/bge-reranker-base \
