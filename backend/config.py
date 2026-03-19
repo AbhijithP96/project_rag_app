@@ -12,7 +12,7 @@ BASE_DIR = Path(os.getcwd())
 # ── Ollama ─────────────────────────────────────────────
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 LLM_MODEL = os.getenv("LLM_MODEL", "llama3.2:3b")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "mxbai-embed-large")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "mxbai-embed-large:latest")
 
 # ── Model paths ────────────────────────────────────────
 MODELS_DIR = Path(os.getenv("MODELS_DIR", "./models"))

@@ -9,16 +9,8 @@ services:
       - "11434:11434"
     volumes:
       - ollama_models:/root/.ollama
-    # GPU — comment out if no NVIDIA GPU available
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -43,18 +35,12 @@ services:
       - CONTENT_HASHING=true
       - HYBRID_SEARCH=true
       - RERANKING=true
+      - HOST_DOCS_PATH=/home 
     volumes:
-      # persist FAISS index between restarts
       - faiss_index:/app/faiss_index
-      # persist BGE reranker model
       - bge_reranker:/app/models
-      # persist logs
       - backend_logs:/app/logs
-      # ── host filesystem access ─────────────────────
-      # mounts host home directory into container at /host/home
-      # users can index any path under /host/home/...
-      # change ${HOST_DOCS_PATH} in .env to restrict to a specific folder
-      - ${HOST_DOCS_PATH:-~}:/host/home:ro
+      - ${HOST_DOCS_PATH}:/home:ro
     depends_on:
       ollama:
         condition: service_healthy
@@ -78,6 +64,10 @@ services:
 
 volumes:
   ollama_models:
+    external: true        
   faiss_index:
+    name: faiss_index
   bge_reranker:
+    name: bge_reranker
   backend_logs:
+    name: backend_logs

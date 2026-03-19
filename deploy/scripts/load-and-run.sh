@@ -21,7 +21,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 if ! docker compose version >/dev/null 2>&1 && \
-   ! command -v docker-compose >/dev/null 2>&1; then
+   ! command -v docker compose >/dev/null 2>&1; then
     echo "ERROR: Docker Compose not found."
     echo "Install docker-compose-plugin — see README Section 2.2"
     exit 1
@@ -62,7 +62,7 @@ REQUIRED_FILES=(
     rag-frontend.tar
     ollama.tar
     ollama-models.tar.gz
-    docker-compose.yml
+    docker-compose.yaml
     .env
 )
 
@@ -156,7 +156,7 @@ echo "Waiting for services to be ready..."
 echo "Waiting for Ollama..."
 for i in $(seq 1 20); do
     if docker exec rag-ollama \
-        curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+        ollama list >/dev/null 2>&1; then
         echo "Ollama ready ✓"
         break
     fi
@@ -194,7 +194,7 @@ echo " RAG App is running!"
 echo ""
 echo "  Open in browser:  http://localhost:3000"
 echo "  Backend health:   http://localhost:8000/health"
-echo "  Ollama models:    http://localhost:11434/api/tags"
+echo "  Ollama models:    http://localhost:11434/"
 echo ""
 echo "  Documents:  mount your docs folder into the container"
 echo "    edit .env → HOST_DOCS_PATH=/path/to/docs"

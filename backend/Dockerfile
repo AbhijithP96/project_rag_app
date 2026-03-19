@@ -11,7 +11,10 @@ RUN apt-get update && apt-get install -y \
 
 # copy and install Python dependencies first (layer caching)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir \
+    --timeout=600 \
+    --retries=5 \
+    -r requirements.txt
 
 # copy application code
 COPY . .

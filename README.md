@@ -121,6 +121,7 @@ Download the offline packge on the internet machine and transfer it to VM and th
 
 ### 2.3 Extract the bundle
 ```bash
+tar -xf rag-app-docker.tar.gz
 # go into extracted dist directory
 cd ~/dist/
 
@@ -133,7 +134,8 @@ ls
 ### 2.4 Run the setup script
 ```bash
 chmod +x load-and-run.sh
-./load-and-run.sh
+cd ..
+./dist/load-and-run.sh
 ```
 
 What the script does step by step:
@@ -177,6 +179,8 @@ http://localhost:3000
 
 ## Indexing documents
 
+Create a `.env` file inside deploy folder.
+
 The backend container can access your host filesystem
 through the volume mount defined in `.env`:
 ```env
@@ -187,12 +191,12 @@ HOST_DOCS_PATH=~
 HOST_DOCS_PATH=/home/user/documents
 ```
 
-Inside the container your host path is available at `/host/home`.
+Inside the container your host path is available at `/home`.
 
 **Example:** if your documents are at `/home/user/docs/`
 then inside the widget use the path:
 ```
-/host/home/thesis/docs
+/home/docs
 ```
 
 **To change the mounted folder:**

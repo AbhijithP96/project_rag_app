@@ -18,7 +18,7 @@ echo "Output dir:   $OUTPUT_DIR"
 
 mkdir -p "$OUTPUT_DIR"
 
-# ── pre-flight checks ──────────────────────────────────
+# pre-flight checks
 echo ""
 echo "Checking prerequisites..."
 
@@ -48,7 +48,7 @@ fi
 
 echo "All prerequisites met ✓"
 
-# ── 1. build backend image ─────────────────────────────
+# 1. build backend image 
 echo ""
 echo "[1/6] Building backend Docker image..."
 
@@ -59,25 +59,25 @@ docker build \
 
 echo "rag-backend:latest built ✓"
 
-# ── 2. build frontend image ────────────────────────────
+# 2. build frontend image
 echo ""
 echo "[2/6] Building frontend Docker image..."
 
 docker build \
     -t rag-frontend:latest \
     -f "$PROJECT_ROOT/frontend/Dockerfile" \
-    "$PROJECT_ROOT"
+    "$PROJECT_ROOT/frontend"
 
 echo "rag-frontend:latest built ✓"
 
-# ── 3. pull Ollama image ───────────────────────────────
+# 3. pull Ollama image
 echo ""
 echo "[3/6] Pulling Ollama Docker image..."
 
 docker pull ollama/ollama:latest
 echo "ollama/ollama:latest pulled ✓"
 
-# ── 4. pull Ollama models inside container ────────────
+# 4. pull Ollama models inside container
 echo ""
 echo "[4/6] Pulling Ollama models (llama3.2:3b + mxbai-embed-large)..."
 
@@ -91,7 +91,7 @@ docker run -d \
 echo "Waiting for Ollama container to start..."
 for i in $(seq 1 20); do
     if docker exec ollama-init \
-        curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+        ollama list >/dev/null 2>&1; then
         echo "Ollama container ready ✓"
         break
     fi
@@ -108,7 +108,7 @@ echo "Pulling llama3.2:3b (~2.0 GB)..."
 docker exec ollama-init ollama pull llama3.2:3b
 
 echo "Pulling mxbai-embed-large (~669 MB)..."
-docker exec ollama-init ollama pull mxbai-embed-large
+docker exec ollama-init ollama pull mxbai-embed-large:latest
 
 echo "Installed models:"
 docker exec ollama-init ollama list
@@ -118,7 +118,7 @@ docker stop ollama-init
 docker rm ollama-init
 echo "Ollama models pulled into volume ✓"
 
-# ── 5. save images to tar files ───────────────────────
+# 5. save images to tar files
 echo ""
 echo "[5/6] Saving Docker images to tar files..."
 
@@ -133,7 +133,7 @@ echo "  ollama.tar         $(du -sh "$OUTPUT_DIR/ollama.tar"         | cut -f1)"
 
 echo "Images saved ✓"
 
-# ── 6. export Ollama models volume ────────────────────
+# 6. export Ollama models volume
 echo ""
 echo "[6/6] Exporting Ollama models volume..."
 
@@ -147,16 +147,16 @@ docker run --rm \
 echo "  ollama-models.tar.gz  $(du -sh "$OUTPUT_DIR/ollama-models.tar.gz" | cut -f1)"
 echo "Ollama models volume exported ✓"
 
-# ── copy supporting files ─────────────────────────────
+# copy supporting files
 echo ""
 echo "Copying supporting files..."
 
-cp "$PROJECT_ROOT/deploy/docker-compose.yml" "$OUTPUT_DIR/"
+cp "$PROJECT_ROOT/docker-compose.yml" "$OUTPUT_DIR/"
 cp "$PROJECT_ROOT/deploy/.env"               "$OUTPUT_DIR/"
 cp "$PROJECT_ROOT/deploy/scripts/load-and-run.sh" "$OUTPUT_DIR/"
 chmod +x "$OUTPUT_DIR/load-and-run.sh"
 
-# ── generate checksums ────────────────────────────────
+# generate checksums
 echo ""
 echo "Generating checksums..."
 cd "$OUTPUT_DIR"
@@ -169,7 +169,7 @@ sha256sum \
 
 cat sha256sums.txt
 
-# ── create final tarball ──────────────────────────────
+# create final tarball
 echo ""
 echo "Creating final tarball..."
 cd "$PROJECT_ROOT/deploy"
