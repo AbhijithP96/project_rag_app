@@ -61,23 +61,25 @@ class Job:
 # worker singleton
 class Worker:
     def __init__(self):
+        # semaphore for query jobs (OOM protection)
         self._semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+        # separate semaphore caps concurrent index builds across different dirs
+        self._index_semaphore = asyncio.Semaphore(2)
         self._jobs: dict[str, Job] = {}
         self._ready: bool = False
         self._shutting_down: bool = False
 
     # lifecycle
     def startup(self):
-        """Warm up models and load index at startup."""
+        """Warm up models and load all persisted indexes at startup."""
         logger.info(
             "worker starting up...",
             stage="system",
         )
 
-        # load persisted index
         loaded = indexer.load_indexes()
         logger.info(
-            f"index loaded: {loaded}",
+            f"indexes loaded: {loaded}",
             stage="system",
         )
 
@@ -175,6 +177,7 @@ class Worker:
     async def handle_query(
         self,
         query: str,
+        index_key: str | None = None,
         history: str = "",
         top_k: int = 10,
         top_n: int = 3,
@@ -188,7 +191,6 @@ class Worker:
         - Graceful cancellation
         """
 
-        # reject if shutting down
         if self._shutting_down:
             yield {
                 "type": "error",
@@ -197,7 +199,6 @@ class Worker:
             }
             return
 
-        # OOM check before accepting job
         if self._check_oom():
             yield {
                 "type": "error",
@@ -206,7 +207,6 @@ class Worker:
             }
             return
 
-        # create job
         rid = request_id or new_request_id()
         set_request_id(rid)
         job = Job(rid, query)
@@ -217,7 +217,6 @@ class Worker:
             stage="stream",
         )
 
-        # acquire semaphore — blocks if MAX_CONCURRENT_REQUESTS reached
         async with self._semaphore:
             job.start()
             logger.info(
@@ -228,11 +227,11 @@ class Worker:
             try:
                 async for event in run_pipeline(
                     query=query,
+                    index_key=index_key,
                     history=history,
                     top_k=top_k,
                     top_n=top_n,
                 ):
-                    # check for cancellation between events
                     if job.cancelled:
                         logger.info(
                             f"job {rid} cancelled mid-stream",
@@ -268,8 +267,11 @@ class Worker:
         request_id: Optional[str] = None,
     ) -> AsyncGenerator[dict, None]:
         """
-        Run indexing pipeline with OOM protection.
-        Yields progress events for SSE streaming.
+        Run indexing for a directory with:
+        - Per-directory key (content-addressed)
+        - Per-key async lock — second tab for same dir waits then gets cached result
+        - Separate index semaphore — different dirs can build concurrently (up to 2)
+        - No overwriting: each directory has its own subdirectory under faiss_index/
         """
         path = Path(directory)
 
@@ -287,13 +289,11 @@ class Worker:
                 ),
             }
             return
-        # use resolved path
+
         directory = str(path)
+
         if self._shutting_down:
-            yield {
-                "status": "error",
-                "message": "Server is shutting down",
-            }
+            yield {"status": "error", "message": "Server is shutting down"}
             return
 
         if self._check_oom():
@@ -306,15 +306,35 @@ class Worker:
         rid = request_id or new_request_id()
         set_request_id(rid)
 
-        logger.info(
-            f"index job started: {rid} — '{directory}'",
-            stage="index",
-        )
+        index_key = indexer.get_index_key(directory)
 
-        async with self._semaphore:
+        # acquire the per-key lock — serialises concurrent requests for the same dir
+        lock = await indexer.get_or_create_lock(index_key)
+
+        async with lock:
+            # if a previous waiter already built it, return immediately
+            if indexer.is_ready(index_key):
+                store = indexer.get_index(index_key)
+                logger.info(
+                    f"index cache hit: {index_key} ({directory})",
+                    stage="index",
+                )
+                yield {
+                    "status": "complete",
+                    "files_processed": [m.source for m in store.chunk_metas],
+                    "chunks_indexed": len(store.chunk_metas),
+                    "index_id": index_key,
+                    "message": "Index already cached",
+                }
+                return
+
+            logger.info(
+                f"index job: {rid} — '{directory}' (key: {index_key})",
+                stage="index",
+            )
+
             try:
                 from document_loader import scan_directory
-                from indexer import build_index
 
                 docs, skipped, failed = scan_directory(directory)
 
@@ -332,7 +352,6 @@ class Worker:
                     }
                     return
 
-                # yield skipped files info
                 if skipped:
                     yield {
                         "status": "indexing",
@@ -343,19 +362,22 @@ class Worker:
                     }
 
                 if not docs:
-                    # all files unchanged — load existing index
-                    indexer.load_indexes()
+                    # all files unchanged — load from disk
+                    indexer.load_index(index_key)
+                    store = indexer.get_index(index_key)
                     yield {
                         "status": "complete",
                         "files_processed": skipped,
-                        "chunks_indexed": len(indexer._chunk_metas),
+                        "chunks_indexed": len(store.chunk_metas),
+                        "index_id": index_key,
                         "message": "All files unchanged — using cached index",
                     }
                     return
 
-                # stream indexing progress
-                async for progress in build_index(docs):
-                    yield progress
+                # build — cap concurrent builds across different directories
+                async with self._index_semaphore:
+                    async for progress in indexer.build_index(docs, index_key):
+                        yield progress
 
             except FileNotFoundError as e:
                 logger.error(
@@ -363,10 +385,7 @@ class Worker:
                     stage="index",
                     error=str(e),
                 )
-                yield {
-                    "status": "error",
-                    "message": str(e),
-                }
+                yield {"status": "error", "message": str(e)}
 
             except Exception as e:
                 logger.error(
@@ -374,10 +393,7 @@ class Worker:
                     stage="index",
                     error=str(e),
                 )
-                yield {
-                    "status": "error",
-                    "message": f"Indexing failed: {str(e)}",
-                }
+                yield {"status": "error", "message": f"Indexing failed: {str(e)}"}
 
 
 # global worker instance

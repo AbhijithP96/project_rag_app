@@ -29,14 +29,13 @@ def _get_reranker() -> CrossEncoder:
             stage="reranking",
         )
         _reranker = CrossEncoder(
-            str(RERANKER_PATH),
-            max_length=512,
+            str(RERANKER_PATH), max_length=512, local_files_only=True
         )
         logger.info("reranker loaded", stage="reranking")
     return _reranker
 
 
-def _build_langchain_docs() -> list[Document]:
+def _build_langchain_docs(store: indexer.IndexStore) -> list[Document]:
     return [
         Document(
             page_content=m.text,
@@ -48,12 +47,13 @@ def _build_langchain_docs() -> list[Document]:
                 "end_char": m.end_char,
             },
         )
-        for m in indexer._chunk_metas
+        for m in store.chunk_metas
     ]
 
 
 async def retrieve(
     query: str,
+    index_key: str | None = None,
     top_k: int = TOP_K_RETRIEVAL,
     top_n: int = TOP_N_RERANK,
 ) -> tuple[list[RetrievedChunk], list[RetrievedChunk]]:
@@ -62,10 +62,11 @@ async def retrieve(
       1. BM25 + FAISS via EnsembleRetriever (RRF fusion)
       2. BGE-Reranker-Base cross-encoder reranking
     """
-    if not indexer.is_ready():
+    if not indexer.is_ready(index_key):
         raise RuntimeError("index not ready — run /index first")
 
-    docs = _build_langchain_docs()
+    store = indexer.get_index(index_key) if index_key else indexer.get_any_index()
+    docs = _build_langchain_docs(store)
 
     # step 1: BM25 retriever
     with Timer("retrieval", {"stage": "bm25"}):
@@ -74,7 +75,7 @@ async def retrieve(
 
     # step 2: FAISS retriever
     with Timer("retrieval", {"stage": "faiss"}):
-        faiss_retriever = indexer._faiss_store.as_retriever(
+        faiss_retriever = store.faiss_store.as_retriever(
             search_type="similarity",
             search_kwargs={"k": top_k},
         )
@@ -115,19 +116,15 @@ async def retrieve(
         with Timer("reranking", {"stage": "bge_reranker"}):
             reranker = _get_reranker()
 
-            # cross-encoder takes (query, passage) pairs
             pairs = [(query, c.text) for c in raw_chunks]
             scores = reranker.predict(pairs)
 
-            # attach scores back to chunks
             for chunk, score in zip(raw_chunks, scores):
                 chunk.score = round(float(score), 4)
                 chunk.vector_score = chunk.score
 
-            # sort by cross-encoder score descending
             raw_chunks.sort(key=lambda c: c.score, reverse=True)
 
-            # filter by threshold + take top_n
             reranked = [c for c in raw_chunks if c.score >= RERANK_THRESHOLD][:top_n]
 
         logger.info(

@@ -14,9 +14,6 @@ python-frontmatter
 openpyxl
 beautifulsoup4
 markdownify
-presidio-analyzer
-presidio-anonymizer
-spacy
 loguru
 python-json-logger
 psutil

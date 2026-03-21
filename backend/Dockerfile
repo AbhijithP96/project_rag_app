@@ -2,6 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Air-gap: block HuggingFace Hub network access at OS level
+ENV HF_HUB_OFFLINE=1 \
+    TRANSFORMERS_OFFLINE=1 \
+    HF_DATASETS_OFFLINE=1 \
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    HF_HUB_DISABLE_PROGRESS_BARS=1
+
 # install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \

@@ -173,6 +173,7 @@ async def query_documents(req: QueryRequest, request: Request):
 
         async for event in worker.handle_query(
             query=req.query,
+            index_key=req.index_id,
             history="",
             top_k=req.top_k,
             top_n=req.rerank_top,
@@ -248,7 +249,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=5000,
         reload=False,
         log_level="warning",  # loguru handles logging
         access_log=False,

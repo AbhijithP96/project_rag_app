@@ -3,6 +3,15 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+# ── Air-gap: block ALL HuggingFace Hub network access ──
+# Must be set before any transformers / sentence_transformers import.
+# These prevent update checks, model downloads, and anonymous telemetry.
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+os.environ.setdefault("HF_DATASETS_OFFLINE", "1")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+
 # load .env if present — silently ignored in Docker
 load_dotenv()
 

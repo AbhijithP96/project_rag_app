@@ -136,6 +136,7 @@ async def _stream_llm(
 # main pipeline
 async def run_pipeline(
     query: str,
+    index_key: str | None = None,
     history: str = "",
     top_k: int = 10,
     top_n: int = 3,
@@ -153,8 +154,8 @@ async def run_pipeline(
         query = redact_query(query)
         logger.info("query PII redacted", stage="pii")
 
-    # step 2: check if index is ready
-    if not indexer.is_ready():
+    # step 2: check if index is ready — require explicit index_key for RAG
+    if not index_key or not indexer.is_ready(index_key):
         logger.info("no index — pure LLM mode", stage="generation")
         yield {"type": "generation_start"}
         async for event in _stream_llm(
@@ -175,7 +176,7 @@ async def run_pipeline(
     try:
         with Timer("retrieval"):
             raw_chunks, reranked_chunks = await retrieve(
-                query, top_k=top_k, top_n=top_n
+                query, index_key=index_key, top_k=top_k, top_n=top_n
             )
     except Exception as e:
         logger.error(f"retrieval failed: {e}", stage="retrieval", error=str(e))

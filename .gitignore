@@ -218,3 +218,4 @@ backend/models/bge-reranker-base
 frontend/public
 backend/.vscode
 deploy/rag-app-docker.tar.gz
+backend/faiss_index

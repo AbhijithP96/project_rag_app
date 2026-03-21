@@ -1,9 +1,11 @@
 # indexer.py
+import asyncio
+import hashlib
 import json
 import pickle
 import uuid
-
-# from pathlib import Path
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -22,14 +24,78 @@ from config import (
 from document_loader import LoadedDocument
 from logger import logger, Timer, log_memory
 
-# paths
-FAISS_PATH = INDEX_DIR / "faiss_store"
-BM25_PATH = INDEX_DIR / "bm25_store.pkl"
-META_PATH = INDEX_DIR / "chunk_meta.json"
-STATS_PATH = INDEX_DIR / "index_stats.json"
+
+# ── per-directory index store ──────────────────────────
+@dataclass
+class IndexStore:
+    faiss_store:  FAISS
+    bm25_index:   BM25Okapi
+    chunk_metas:  list   # list[ChunkMeta]
+    is_ready:     bool = True
 
 
-# chunk metadata
+# ── global registry + per-key locks ───────────────────
+_registry:    dict[str, IndexStore] = {}
+_index_locks: dict[str, asyncio.Lock] = {}
+_lock_mutex:  asyncio.Lock = asyncio.Lock()
+
+
+# ── public index-key helpers ───────────────────────────
+def get_index_key(directory: str) -> str:
+    """Stable 12-char hex key for a directory path."""
+    abs_path = str(Path(directory).resolve())
+    return hashlib.md5(abs_path.encode()).hexdigest()[:12]
+
+
+async def get_or_create_lock(key: str) -> asyncio.Lock:
+    """Return (or lazily create) the asyncio Lock for a given key."""
+    async with _lock_mutex:
+        if key not in _index_locks:
+            _index_locks[key] = asyncio.Lock()
+        return _index_locks[key]
+
+
+# ── readiness / lookup ─────────────────────────────────
+def is_ready(index_key: str | None = None) -> bool:
+    if index_key:
+        store = _registry.get(index_key)
+        return store is not None and store.is_ready
+    return any(s.is_ready for s in _registry.values())
+
+
+def get_index(index_key: str) -> IndexStore:
+    store = _registry.get(index_key)
+    if store is None or not store.is_ready:
+        raise RuntimeError(f"Index '{index_key}' not ready — run /index first")
+    return store
+
+
+def get_any_index() -> IndexStore:
+    """Return any ready index (fallback when no index_key is provided)."""
+    for store in _registry.values():
+        if store.is_ready:
+            return store
+    raise RuntimeError("No index ready — run /index first")
+
+
+# ── path helpers ───────────────────────────────────────
+def _key_dir(key: str) -> Path:
+    return INDEX_DIR / key
+
+def _faiss_path(key: str) -> Path:
+    return _key_dir(key) / "faiss_store"
+
+def _bm25_path(key: str) -> Path:
+    return _key_dir(key) / "bm25_store.pkl"
+
+def _meta_path(key: str) -> Path:
+    return _key_dir(key) / "chunk_meta.json"
+
+def _stats_path(key: str) -> Path:
+    return _key_dir(key) / "index_stats.json"
+
+
+# ── chunk metadata ─────────────────────────────────────
 class ChunkMeta:
     def __init__(
         self,
@@ -65,25 +131,20 @@ class ChunkMeta:
         return cls(**d)
 
 
-# global index checks
-_faiss_store: Optional[FAISS] = None
-_bm25_index: Optional[BM25Okapi] = None
-_chunk_metas: list[ChunkMeta] = []
-_is_ready: bool = False
-
-
-def is_ready() -> bool:
-    return _is_ready
-
-
-def get_chunk_by_id(chunk_id: str) -> Optional[ChunkMeta]:
-    for c in _chunk_metas:
-        if c.chunk_id == chunk_id:
-            return c
+def get_chunk_by_id(chunk_id: str, index_key: str | None = None) -> Optional[ChunkMeta]:
+    stores = (
+        [_registry[index_key]]
+        if index_key and index_key in _registry
+        else list(_registry.values())
+    )
+    for store in stores:
+        for c in store.chunk_metas:
+            if c.chunk_id == chunk_id:
+                return c
     return None
 
 
-# text splitter
+# ── splitter / embeddings ─────────────────────────────
 def _get_splitter() -> RecursiveCharacterTextSplitter:
     return RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
@@ -94,7 +155,11 @@ def _get_splitter() -> RecursiveCharacterTextSplitter:
     )
 
 
-# chunk document
+def _get_embeddings() -> OllamaEmbeddings:
+    return OllamaEmbeddings(model=EMBEDDING_MODEL, base_url=OLLAMA_BASE_URL)
+
+
+# ── chunk a document ──────────────────────────────────
 def _chunk_document(doc: LoadedDocument) -> list[ChunkMeta]:
     splitter = _get_splitter()
     chunks = splitter.split_text(doc.content)
@@ -102,14 +167,12 @@ def _chunk_document(doc: LoadedDocument) -> list[ChunkMeta]:
     cursor = 0
 
     for chunk_text in chunks:
-        # find postion
         start = doc.content.find(chunk_text, cursor)
         if start == -1:
             start = cursor
         end = start + len(chunk_text)
         cursor = max(cursor, start)
 
-        # page number estimation
         page = None
         if doc.file_type == "pdf" and doc.page_count > 1:
             ratio = start / max(len(doc.content), 1)
@@ -130,107 +193,102 @@ def _chunk_document(doc: LoadedDocument) -> list[ChunkMeta]:
     return metas
 
 
-# embedding model
-
-
-def _get_embeddings() -> OllamaEmbeddings:
-    return OllamaEmbeddings(model=EMBEDDING_MODEL, base_url=OLLAMA_BASE_URL)
-
-
-# build bm25 index
-
-
 def _build_bm25(metas: list[ChunkMeta]) -> BM25Okapi:
     tokenized = [m.text.lower().split() for m in metas]
     return BM25Okapi(tokenized)
 
 
-# persist index
-
-
-def _save_indexes(
+# ── persist one key's index to disk ───────────────────
+def _save_index(
+    key: str,
     faiss_store: FAISS,
     bm25_index: BM25Okapi,
     metas: list[ChunkMeta],
     stats: dict,
 ) -> None:
-    # create FAISS
-    faiss_store.save_local(str(FAISS_PATH))
+    key_dir = _key_dir(key)
+    key_dir.mkdir(parents=True, exist_ok=True)
 
-    # BM25
-    with open(BM25_PATH, "wb") as f:
+    faiss_store.save_local(str(_faiss_path(key)))
+
+    with open(_bm25_path(key), "wb") as f:
         pickle.dump(bm25_index, f)
 
-    # chunk metadata
-    META_PATH.write_text(json.dumps([m.to_dict() for m in metas], indent=2))
+    _meta_path(key).write_text(json.dumps([m.to_dict() for m in metas], indent=2))
+    _stats_path(key).write_text(json.dumps(stats, indent=2))
 
-    # index stats
-    STATS_PATH.write_text(json.dumps(stats, indent=2))
-
-    logger.info(
-        f"indexes saved to {INDEX_DIR}",
-        stage="index",
-    )
+    logger.info(f"index saved: {key_dir}", stage="index")
 
 
-# load saved indexes
-def load_indexes() -> bool:
-    global _faiss_store, _bm25_index, _chunk_metas, _is_ready
-
-    if not all(
-        [
-            FAISS_PATH.exists(),
-            BM25_PATH.exists(),
-            META_PATH.exists(),
-        ]
-    ):
-        logger.info("no persisted index found", stage="index")
+# ── load a single key from disk ────────────────────────
+def load_index(key: str) -> bool:
+    if not all([
+        _faiss_path(key).exists(),
+        _bm25_path(key).exists(),
+        _meta_path(key).exists(),
+    ]):
         return False
 
     try:
         embeddings = _get_embeddings()
-        _faiss_store = FAISS.load_local(
-            str(FAISS_PATH),
+        faiss_store = FAISS.load_local(
+            str(_faiss_path(key)),
             embeddings,
             allow_dangerous_deserialization=True,
         )
 
-        with open(BM25_PATH, "rb") as f:
-            _bm25_index = pickle.load(f)
+        with open(_bm25_path(key), "rb") as f:
+            bm25_index = pickle.load(f)
 
-        raw_metas = json.loads(META_PATH.read_text())
-        _chunk_metas = [ChunkMeta.from_dict(m) for m in raw_metas]
-        _is_ready = True
+        raw_metas = json.loads(_meta_path(key).read_text())
+        chunk_metas = [ChunkMeta.from_dict(m) for m in raw_metas]
+
+        _registry[key] = IndexStore(
+            faiss_store=faiss_store,
+            bm25_index=bm25_index,
+            chunk_metas=chunk_metas,
+        )
 
         logger.info(
-            f"indexes loaded: {len(_chunk_metas)} chunks",
+            f"index loaded: {key} ({len(chunk_metas)} chunks)",
             stage="index",
-            chunk_count=len(_chunk_metas),
+            chunk_count=len(chunk_metas),
         )
         return True
 
     except Exception as e:
-        logger.error(f"failed to load indexes: {e}", stage="index", error=str(e))
+        logger.error(f"failed to load index {key}: {e}", stage="index", error=str(e))
         return False
 
 
-# main function
-async def build_index(docs: list[LoadedDocument]):
-    """
-    Build FAISS + BM25 index from loaded documents.
-    Yields progress dicts for SSE streaming.
-    """
-    global _faiss_store, _bm25_index, _chunk_metas, _is_ready
+# ── load all persisted indexes at startup ─────────────
+def load_indexes() -> bool:
+    """Scan INDEX_DIR for per-key subdirs and load them all."""
+    loaded = 0
+    if not INDEX_DIR.exists():
+        return False
+    for subdir in INDEX_DIR.iterdir():
+        if subdir.is_dir() and len(subdir.name) == 12:
+            if load_index(subdir.name):
+                loaded += 1
+    logger.info(f"startup: {loaded} indexes loaded", stage="index")
+    return loaded > 0
 
-    _is_ready = False
+
+# ── build index for a specific key ────────────────────
+async def build_index(docs: list[LoadedDocument], index_key: str):
+    """
+    Build FAISS + BM25 index for index_key.
+    Yields SSE progress dicts. Caller holds the per-key lock.
+    """
     all_metas: list[ChunkMeta] = []
     file_type_counts: dict[str, int] = {}
 
-    # load existing chunks
-    if META_PATH.exists():
+    # retain chunks from files not being re-indexed
+    meta_p = _meta_path(index_key)
+    if meta_p.exists():
         try:
-            existing = json.loads(META_PATH.read_text())
-            # keep chunks from files not being reindexed
+            existing = json.loads(meta_p.read_text())
             new_sources = {d.source for d in docs}
             kept = [
                 ChunkMeta.from_dict(m)
@@ -290,11 +348,7 @@ async def build_index(docs: list[LoadedDocument]):
         embeddings = _get_embeddings()
         texts = [m.text for m in all_metas]
         metadatas = [{"chunk_id": m.chunk_id, "source": m.source} for m in all_metas]
-        _faiss_store = FAISS.from_texts(
-            texts,
-            embeddings,
-            metadatas=metadatas,
-        )
+        faiss_store = FAISS.from_texts(texts, embeddings, metadatas=metadatas)
 
     log_memory("after FAISS build")
     logger.info(
@@ -303,7 +357,7 @@ async def build_index(docs: list[LoadedDocument]):
         chunk_count=len(all_metas),
     )
 
-    # build bm25
+    # build BM25
     yield {
         "status": "indexing",
         "current_file": "building BM25 index...",
@@ -312,7 +366,7 @@ async def build_index(docs: list[LoadedDocument]):
     }
 
     with Timer("index"):
-        _bm25_index = _build_bm25(all_metas)
+        bm25_index = _build_bm25(all_metas)
 
     logger.info(
         f"BM25 index built: {len(all_metas)} documents",
@@ -329,12 +383,16 @@ async def build_index(docs: list[LoadedDocument]):
         "file_types": file_type_counts,
     }
 
-    _save_indexes(_faiss_store, _bm25_index, all_metas, stats)
-    _chunk_metas = all_metas
-    _is_ready = True
+    _save_index(index_key, faiss_store, bm25_index, all_metas, stats)
+
+    _registry[index_key] = IndexStore(
+        faiss_store=faiss_store,
+        bm25_index=bm25_index,
+        chunk_metas=all_metas,
+    )
 
     logger.info(
-        f"index complete: {len(all_metas)} chunks from {len(docs)} files",
+        f"index complete: {len(all_metas)} chunks from {len(docs)} files (key: {index_key})",
         stage="index",
         chunk_count=len(all_metas),
         file_count=len(docs),
@@ -345,5 +403,6 @@ async def build_index(docs: list[LoadedDocument]):
         "current_file": "",
         "files_processed": [d.source for d in docs],
         "chunks_indexed": len(all_metas),
+        "index_id": index_key,
         "message": f"{len(all_metas)} chunks indexed from {len(docs)} files",
     }
