@@ -63,6 +63,7 @@ export async function* mockQuery(
   query:       string,
   budgetLimit: number = 8192,
   indexId?:    string,
+  sessionId?:  string,
 ): AsyncGenerator<SSEEvent> {
   const response = await fetch(`${API_BASE}/query`, {
     method:  'POST',
@@ -71,7 +72,8 @@ export async function* mockQuery(
       query,
       top_k:      10,
       rerank_top: 3,
-      index_id:   indexId ?? null,
+      index_id:   indexId  ?? null,
+      session_id: sessionId ?? null,
     }),
   })
 

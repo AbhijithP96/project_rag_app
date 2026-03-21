@@ -173,8 +173,8 @@ async def query_documents(req: QueryRequest, request: Request):
 
         async for event in worker.handle_query(
             query=req.query,
+            session_id=req.session_id,
             index_key=req.index_id,
-            history="",
             top_k=req.top_k,
             top_n=req.rerank_top,
             request_id=rid,

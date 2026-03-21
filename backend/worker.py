@@ -1,15 +1,13 @@
 # worker.py
 import asyncio
-import signal
 import time
-import uuid
 from enum import Enum
 from typing import AsyncGenerator, Optional
 from pathlib import Path
 
 import psutil
 
-from config import MAX_CONCURRENT_REQUESTS, TOKEN_BUDGET, BASE_DIR
+from config import MAX_CONCURRENT_REQUESTS, BASE_DIR
 from logger import logger, new_request_id, set_request_id, get_all_p95
 from rag_pipeline import run_pipeline
 import indexer
@@ -176,11 +174,11 @@ class Worker:
     # main query handler
     async def handle_query(
         self,
-        query: str,
-        index_key: str | None = None,
-        history: str = "",
-        top_k: int = 10,
-        top_n: int = 3,
+        query:      str,
+        session_id: str | None = None,
+        index_key:  str | None = None,
+        top_k:      int = 10,
+        top_n:      int = 3,
         request_id: Optional[str] = None,
     ) -> AsyncGenerator[dict, None]:
         """
@@ -227,8 +225,8 @@ class Worker:
             try:
                 async for event in run_pipeline(
                     query=query,
+                    session_id=session_id,
                     index_key=index_key,
-                    history=history,
                     top_k=top_k,
                     top_n=top_n,
                 ):

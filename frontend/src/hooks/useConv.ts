@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useSSEStream } from './handleSSE'
 import { logger } from '../utils/logger'
 import type { Message } from '../api/types'
@@ -9,6 +9,8 @@ function generateId(): string {
 
 export function useConversation(budgetLimit: number = 8192) {
   const [messages, setMessages] = useState<Message[]>([])
+  // stable per-tab session ID — never persisted, so each tab is isolated
+  const sessionId = useRef<string>(crypto.randomUUID())
   const { state: stream, sendQuery, cancel, reset: resetStream } = useSSEStream(budgetLimit)
 
   // ── add a user message and fire the query ─────────────
@@ -50,7 +52,7 @@ export function useConversation(budgetLimit: number = 8192) {
     setMessages(prev => [...prev, assistantMsg])
 
     // 3. fire the stream — updates come via stream state
-    await sendQuery(query, indexId)
+    await sendQuery(query, indexId, sessionId.current)
 
   }, [stream.isStreaming, sendQuery])
 

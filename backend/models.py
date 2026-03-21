@@ -25,10 +25,11 @@ class IndexProgressEvent(BaseModel):
 
 # /query endpoint
 class QueryRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=2048)
-    top_k: int = Field(default=10, ge=1, le=20)
+    query:      str = Field(..., min_length=1, max_length=2048)
+    top_k:      int = Field(default=10, ge=1, le=20)
     rerank_top: int = Field(default=3, ge=1, le=10)
-    index_id: Optional[str] = None
+    index_id:   Optional[str] = None
+    session_id: Optional[str] = None
 
 
 # retrieved chunk

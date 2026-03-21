@@ -19,3 +19,4 @@ python-json-logger
 psutil
 python-dateutil
 python-dotenv
+redis

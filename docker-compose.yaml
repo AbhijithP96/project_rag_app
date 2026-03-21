@@ -16,6 +16,20 @@ services:
       retries: 5
       start_period: 30s
 
+  # ── Redis (conversation history) ──────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   # ── FastAPI backend ───────────────────────────────────
   rag-backend:
     image: rag-backend:latest
@@ -25,7 +39,7 @@ services:
       - "8000:8000"
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
-      - LLM_MODEL=llama3.2:3b
+      - LLM_MODEL=qwen2.5:latest
       - EMBEDDING_MODEL=mxbai-embed-large
       - LOG_LEVEL=INFO
       - MAX_CONCURRENT_REQUESTS=3
@@ -35,7 +49,8 @@ services:
       - CONTENT_HASHING=true
       - HYBRID_SEARCH=true
       - RERANKING=true
-      - HOST_DOCS_PATH=/home 
+      - HOST_DOCS_PATH=/home
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - faiss_index:/app/faiss_index
       - bge_reranker:/app/models
@@ -43,6 +58,8 @@ services:
       - ${HOST_DOCS_PATH}:/home:ro
     depends_on:
       ollama:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
