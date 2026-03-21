@@ -114,6 +114,7 @@ export function MessageBubble({ message, chunks, shadowRoot }: Props) {
 
 // ── ReactMarkdown component overrides ─────────────────
 // maps markdown elements to shadow-DOM safe class names
+// a and img are blocked — no external resource fetches in air-gapped environments
 const mdComponents = {
   p:    ({ children }: any) => <p className="md-p">{children}</p>,
   strong:({ children }: any) => <strong className="md-bold">{children}</strong>,
@@ -127,6 +128,12 @@ const mdComponents = {
   ul:   ({ children }: any) => <ul className="md-ul">{children}</ul>,
   ol:   ({ children }: any) => <ol className="md-ol">{children}</ol>,
   li:   ({ children }: any) => <li className="md-li">{children}</li>,
+  // block external links — render as plain text to prevent navigation out of air-gap
+  a:    ({ href, children }: any) => (
+    <span className="md-link-blocked" title={href}>{children}</span>
+  ),
+  // block images — prevent browser from fetching external URLs
+  img:  () => null,
 }
 
 // ── split text on [n] citation markers ────────────────

@@ -12,7 +12,7 @@ export function useConversation(budgetLimit: number = 8192) {
   const { state: stream, sendQuery, cancel, reset: resetStream } = useSSEStream(budgetLimit)
 
   // ── add a user message and fire the query ─────────────
-  const submitQuery = useCallback(async (query: string) => {
+  const submitQuery = useCallback(async (query: string, indexId?: string) => {
     if (!query.trim() || stream.isStreaming) return
 
     // 1. push user message immediately
@@ -50,7 +50,7 @@ export function useConversation(budgetLimit: number = 8192) {
     setMessages(prev => [...prev, assistantMsg])
 
     // 3. fire the stream — updates come via stream state
-    await sendQuery(query)
+    await sendQuery(query, indexId)
 
   }, [stream.isStreaming, sendQuery])
 

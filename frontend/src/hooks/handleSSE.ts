@@ -28,7 +28,7 @@ export function useSSEStream(budgetLimit: number = 8192) {
   const [state, setState] = useState<StreamState>(initialState)
   const abortRef = useRef(false)
 
-  const sendQuery = useCallback(async (query: string) => {
+  const sendQuery = useCallback(async (query: string, indexId?: string) => {
     abortRef.current = false
 
     setState({
@@ -37,7 +37,7 @@ export function useSSEStream(budgetLimit: number = 8192) {
       phase: 'retrieving',
     })
 
-    const generator = mockQuery(query, budgetLimit)
+    const generator = mockQuery(query, budgetLimit, indexId)
 
     for await (const event of generator) {
       if (abortRef.current) break

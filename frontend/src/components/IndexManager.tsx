@@ -4,10 +4,10 @@ import { mockIndexDirectory } from '../api/mockapi'
 import { logger } from '../utils/logger'
 import type { IndexProgressEvent } from '../api/types'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = 'http://localhost:5000'
 
 interface Props {
-  onStatusChange: (status: 'idle' | 'indexing' | 'ready' | 'error') => void
+  onStatusChange: (status: 'idle' | 'indexing' | 'ready' | 'error', indexId?: string) => void
 }
 
 interface IndexState {
@@ -141,7 +141,7 @@ export function IndexManager({ onStatusChange }: Props) {
     }))
 
     if (event.status === 'complete') {
-      onStatusChange('ready')
+      onStatusChange('ready', event.indexId)
       logger.info('index',
         `complete · ${event.filesProcessed.length} files · ${event.chunksIndexed} chunks`
       )
@@ -181,7 +181,7 @@ export function IndexManager({ onStatusChange }: Props) {
           <span className="index-title">index manager</span>
           {status === 'ready' && (
             <span className="index-badge ready">
-              {filesProcessed.length} files · {chunksIndexed} chunks
+              {new Set(filesProcessed.map(f => f.split('/').pop() ?? f)).size} files · {chunksIndexed} chunks
             </span>
           )}
           {status === 'indexing' && (
@@ -371,25 +371,25 @@ export function IndexManager({ onStatusChange }: Props) {
           )}
 
           {/* ── READY — file list ── */}
-          {status === 'ready' && filesProcessed.length > 0 && (
-            <div className="index-file-list">
-              <div className="index-file-list-header">
-                <span className="index-file-list-title">indexed files</span>
-                <span className="index-file-list-count">
-                  {chunksIndexed} total chunks
-                </span>
-              </div>
-              {filesProcessed.map(file => (
-                <div key={file} className="index-file-row">
-                  <span className="index-file-icon">◆</span>
-                  <span className="index-file-name">{file}</span>
-                  <span className="index-file-chunks">
-                    ~{Math.floor(chunksIndexed / Math.max(filesProcessed.length, 1))}
+          {status === 'ready' && filesProcessed.length > 0 && (() => {
+            const unique = [...new Set(filesProcessed.map(f => f.split('/').pop() ?? f))]
+            return (
+              <div className="index-file-list">
+                <div className="index-file-list-header">
+                  <span className="index-file-list-title">indexed files</span>
+                  <span className="index-file-list-count">
+                    {unique.length} files · {chunksIndexed} chunks
                   </span>
                 </div>
-              ))}
-            </div>
-          )}
+                {unique.map(file => (
+                  <div key={file} className="index-file-row">
+                    <span className="index-file-icon">◆</span>
+                    <span className="index-file-name">{file}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
 
           {/* ── ERROR ── */}
           {status === 'error' && (

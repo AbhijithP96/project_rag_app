@@ -17,13 +17,14 @@ interface Props {
 interface UIState {
   theme:       'light' | 'dark'
   indexStatus: IndexStatus
+  indexId:     string | undefined
   logOpen:     boolean
 }
 
 type UIAction =
   | { type: 'TOGGLE_THEME' }
   | { type: 'TOGGLE_LOG' }
-  | { type: 'SET_INDEX_STATUS'; payload: IndexStatus }
+  | { type: 'SET_INDEX_STATUS'; payload: IndexStatus; indexId?: string }
 
 function reducer(state: UIState, action: UIAction): UIState {
   switch (action.type) {
@@ -32,7 +33,7 @@ function reducer(state: UIState, action: UIAction): UIState {
     case 'TOGGLE_LOG':
       return { ...state, logOpen: !state.logOpen }
     case 'SET_INDEX_STATUS':
-      return { ...state, indexStatus: action.payload }
+      return { ...state, indexStatus: action.payload, indexId: action.indexId }
   }
 }
 
@@ -40,6 +41,7 @@ export function AskDocsWidget({ options, shadowHost }: Props) {
   const [ui, dispatch] = useReducer(reducer, {
     theme:       options.theme ?? 'dark',
     indexStatus: 'idle',
+    indexId:     undefined,
     logOpen:     false,
   })
 
@@ -91,7 +93,7 @@ export function AskDocsWidget({ options, shadowHost }: Props) {
     if (!query || stream.isStreaming) return
     if (inputRef.current) inputRef.current.value = ''
     inputVal.current = ''
-    submitQuery(query)
+    submitQuery(query, ui.indexId)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -146,8 +148,8 @@ export function AskDocsWidget({ options, shadowHost }: Props) {
 
       {/* ── INDEX MANAGER — sits below top bar ── */}
       <IndexManager
-        onStatusChange={status =>
-          dispatch({ type: 'SET_INDEX_STATUS', payload: status })
+        onStatusChange={(status, indexId) =>
+          dispatch({ type: 'SET_INDEX_STATUS', payload: status, indexId })
         }
       />
 

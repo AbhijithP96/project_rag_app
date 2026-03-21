@@ -5,7 +5,7 @@ import type {
   IndexRequest,
 } from './types'
 
-const API_BASE = 'http://localhost:8000'
+const API_BASE = 'http://localhost:5000'
 
 // ── /index endpoint ───────────────────────────────────
 export async function* mockIndexDirectory(
@@ -49,6 +49,7 @@ export async function* mockIndexDirectory(
           chunksIndexed:   raw.chunks_indexed   ?? raw.chunksIndexed   ?? 0,
           currentFile:     raw.current_file     ?? raw.currentFile,
           message:         raw.message,
+          indexId:         raw.index_id         ?? raw.indexId,
         } as IndexProgressEvent
       } catch {
         // skip malformed lines
@@ -61,6 +62,7 @@ export async function* mockIndexDirectory(
 export async function* mockQuery(
   query:       string,
   budgetLimit: number = 8192,
+  indexId?:    string,
 ): AsyncGenerator<SSEEvent> {
   const response = await fetch(`${API_BASE}/query`, {
     method:  'POST',
@@ -69,6 +71,7 @@ export async function* mockQuery(
       query,
       top_k:      10,
       rerank_top: 3,
+      index_id:   indexId ?? null,
     }),
   })
 

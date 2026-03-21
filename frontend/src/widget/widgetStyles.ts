@@ -857,6 +857,7 @@ ul, ol { list-style: none; }
 .md-p:last-child { margin-bottom: 0; }
 .md-bold         { font-weight: 600; color: var(--text-primary); }
 .md-italic       { font-style: italic; }
+.md-link-blocked { color: var(--text-secondary); text-decoration: underline dotted; cursor: default; }
 
 .md-code {
   font-family: var(--font);

@@ -52,6 +52,7 @@ export interface IndexProgressEvent {
   chunksIndexed:  number
   currentFile?:   string
   message?:       string
+  indexId?:       string   // key identifying this directory's index
 }
 
 // ── Conversation types ─────────────────────────────────
